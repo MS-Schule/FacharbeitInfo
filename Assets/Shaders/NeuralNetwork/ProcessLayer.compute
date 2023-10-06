@@ -1,0 +1,20 @@
+#pragma kernel ProcessLayer
+
+int weightsPerNeuron;
+
+RWStructuredBuffer<float> values;
+StructuredBuffer<float> weights;
+StructuredBuffer<float> biases;
+
+StructuredBuffer<float> InputValues;
+
+[numthreads(8,1,1)]
+void ProcessLayer (uint3 id : SV_DispatchThreadID)
+{
+    values[id.x] = 0;
+    for(int i = 0; i < weightsPerNeuron; i++) {
+       values[id.x] += InputValues[i] * weights[i + id.x*weightsPerNeuron];
+    }
+    values[id.x] += biases[id.x];
+    values[id.x] = tanh(values[id.x]);
+}

@@ -1,0 +1,50 @@
+#pragma kernel LineDrawer
+
+RWTexture2D<float4> Result;
+
+float2 pixelOrigin;
+float2 pixelDestination;
+float thickness;
+float steps;
+float4 color;
+
+[numthreads(16,1,1)]
+void LineDrawer (uint3 id : SV_DispatchThreadID)
+{
+    float2 t = pixelOrigin;
+    t.x = lerp(pixelOrigin.x, pixelDestination.x, id.x/steps);
+    t.y = lerp(pixelOrigin.y, pixelDestination.y, id.x/steps);
+
+    float tckSquared = thickness * thickness;
+
+    for (int u = t.x - thickness; u < t.x + thickness + 1; u++)
+        for (int v = t.y - thickness; v < t.y + thickness + 1; v++)
+            if ((t.x - u) * (t.x - u) + (t.y - v) * (t.y - v) < tckSquared)
+                Result[int2(u, v)] = color;
+}
+
+#pragma kernel CircleDrawer
+
+struct Circle {
+    int2 position;
+    int radius;
+    float4 color;
+};
+
+StructuredBuffer<Circle> circles;
+
+[numthreads(16,1,1)]
+void CircleDrawer (uint3 id : SV_DispatchThreadID)
+{
+    Circle circle = circles[id.x];
+
+    float tckSquared = circle.radius * circle.radius;
+
+    for (int u = circle.position.x - circle.radius; u < circle.position.x + circle.radius + 1; u++) {
+        for (int v = circle.position.y - circle.radius; v < circle.position.y + circle.radius + 1; v++) {
+            if ((circle.position.x - u) * (circle.position.x - u) + (circle.position.y - v) * (circle.position.y - v) < tckSquared) {
+                Result[int2(u, v)] = circle.color;
+            }
+        }
+    }
+}
