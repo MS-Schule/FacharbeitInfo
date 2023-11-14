@@ -1,0 +1,16 @@
+{
+  "layerNum": 3,
+  "layerSizes": [
+    200,
+    80,
+    10
+  ],
+  "inputSize": {
+    "x": 28,
+    "y": 28,
+    "magnitude": 39.59798,
+    "sqrMagnitude": 1568
+  },
+  "activType": 1,
+  "costType": 0
+}

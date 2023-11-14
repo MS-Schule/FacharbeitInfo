@@ -1,123 +1,171 @@
 using System.Collections;
-using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
+
+public enum LearnType
+{
+    NeuralNetwork,
+    Clustering
+}
 
 public class Main : MonoBehaviour
 {
-    public RectTransform costGraphContainer;
+    #region Public fields
 
-    [Space()]
-    [Header("Buttons")]
-    public Button forceUpdate;
-    public Button allEpochsBtn;
-    public Button oneEpochBtn;
-    public Button testBtn;
-    public Button continueBtn;
+    [Header("Settings")]
+    public LearnType learnType;
+    public ActivationType activationType;
+    public CostType costType;
 
-    [Space()]
-    [Header("Input fields")]
-    public InputField epochAmount;
-    public InputField miniBatchSize;
-    public InputField fullBatchSize;
-
-    [Space()]
-    [Header("Display")]
-    public RawImage display;
-    public Text displayLabel;
-    private Texture2D sampleImage;
-
-    [Space()]
-    [Header("Shader")]
-    public ComputeShader basicDrawer;
-    public ComputeShader layerShader;
+    public MainUI ui;
+    public ErrorGraph errorGraph;
 
     [HideInInspector]
-    public Neural_Network neuralNetwork;
-    private MNISTTrainer trainer;
-    private SecUI secUI;
+    public NeuralNetwork neuralNetwork;
 
-    public bool executeNextBatch = false;
+    [HideInInspector]
+    public Clusterer clusterer;
+
+    #endregion
+
+    #region Private fields
+
+    //Interfaces
+    private ISecUI secUI;
+    public ISaver saver;
+    private ITrainer trainer;
+    private ITester tester;
+
+    #endregion
+
     void Awake()
     {
-        if (!GameObject.Find("Secondary UI").TryGetComponent<SecUI>(out secUI))
-            Debug.Log("Could not find sec UI");
-        int[] layerSizes = new int[] {
-            28 * 28,
+
+        if(learnType == LearnType.NeuralNetwork) {
+            InitializeNetworkSim();
+        } else {
+            InitializeClusteringSim();
+        }
+
+        trainer.Init(this);
+        tester.Init(this);
+        secUI.Init(this);
+    }
+
+    //---------Training methods-----------
+
+    #region Training
+
+    public IEnumerator StartTrainer(TrainerInfo trainerInfo)
+    {
+        yield return StartCoroutine(trainer.ExecuteEpochs(
+            trainerInfo,
+            FinishFrame,
+            DocumentErrorRate
+        ));
+        FinishFrame(false, trainerInfo);
+    }
+
+    private void FinishFrame(bool isExecuting, TrainerInfo info, int currentEpoch = 0, int currentBatch = 0) {
+        if(ui.errorGraphActive)
+            errorGraph.UpdateScreen(isExecuting, info, currentEpoch, currentBatch);
+        else
+            secUI.UpdateScreen(isExecuting, info, currentEpoch, currentBatch);
+    }
+
+    private void DocumentErrorRate() {
+        bool status = errorGraph.transform.parent.gameObject.activeInHierarchy;
+        errorGraph.transform.parent.gameObject.SetActive(true);
+        errorGraph.AddTestNode(tester.CalculateAccuracy());
+        errorGraph.AddTrainNode(trainer.CalculateAccuracy());
+        errorGraph.transform.parent.gameObject.SetActive(status);
+    }
+
+    #endregion
+
+    //--------Button methods--------
+
+    #region Button methods
+
+    public void ToggleSecUI() {
+        secUI.ToggleActive();
+        errorGraph.ToggleActive();
+    }
+
+    public void InsertTestSample() {
+        int sampleIndex = Random.Range(0, tester.ImageCount());
+        ui.DisplayImage(tester.Classify(sampleIndex));
+        ui.displayedImageIndex = sampleIndex;
+    }
+
+    public void InsertTrainSample(int trainSamples) {
+        int sampleIndex = Random.Range(0, trainSamples);
+        ui.DisplayImage(trainer.Classify(sampleIndex));
+        ui.displayedImageIndex = sampleIndex;
+    }
+
+    public void LogAccuracy() {
+        Debug.Log("Calculating full set accuracy. This may take some time...");
+        tester.FullSetAccuracy();
+    }
+
+    public void ComputeDisplayedSample() {
+        int label;
+        label = tester.Classify(ui.displayedImageIndex).img.Label;
+    }
+
+    #endregion
+
+        //------Initializations----------
+
+    #region Initializations
+
+    private void InitializeNetworkSim() {
+        var clusteringUI = GameObject.Find("Secondary UICL");
+        if (!clusteringUI.TryGetComponent<CL_SecUI>(out CL_SecUI otherUI))
+            Debug.Log("Could not find sec UI CL");
+        clusteringUI.transform.parent.gameObject.SetActive(false);
+
+        var networkUI = GameObject.Find("Secondary UINN");
+        if (!networkUI.TryGetComponent<ISecUI>(out secUI))
+            Debug.Log("Could not find sec UI NN");
+
+        networkUI.transform.parent.gameObject.SetActive(true);
+
+        errorGraph.transform.parent.gameObject.SetActive(false);
+
+        trainer = new NetworkMNISTTrainer(this);
+        tester = new NetworkTester();
+
+        int[] layerSizes = new int[3] {
             64,
             32,
             10
         };
-        neuralNetwork = new Neural_Network(layerSizes, layerShader);
-        trainer = new(this);
-        sampleImage = new Texture2D(28, 28, TextureFormat.ARGB32, false) { filterMode = FilterMode.Point };
-        forceUpdate.onClick.AddListener(neuralNetwork.Compute);
-        secUI.Init(this, 3);
 
-        allEpochsBtn.onClick.AddListener(delegate
-        {
-            StartCoroutine(StartTrainer());
-        });
-
-        oneEpochBtn.onClick.AddListener(delegate
-        {
-            epochAmount.text = "1";
-            StartCoroutine(StartTrainer());
-        });
-
-        testBtn.onClick.AddListener(delegate
-        {
-            int sampleIndex = Random.Range(0, int.Parse(fullBatchSize.text));
-            trainer.WriteSample(sampleIndex);
-            Dataset image = trainer.PassSample(sampleIndex);
-            ProjectOnTexture(image, ref sampleImage);
-            display.texture = sampleImage;
-            displayLabel.text = "Label: " + System.Convert.ToString(image.Label);
-            secUI.UpdateScreen(false, int.Parse(epochAmount.text), int.Parse(fullBatchSize.text), int.Parse(miniBatchSize.text));
-        });
-
-        continueBtn.onClick.AddListener(delegate
-        {
-            //executeNextBatch = true;
-            foreach (var layer in neuralNetwork.layers)
-                layer.ApplyGradients(HyperParameters.learnRate, HyperParameters.regularization, HyperParameters.momentum);
-        });
+        neuralNetwork = new NeuralNetwork(layerSizes, new Vector2Int(28, 28), activationType, costType);
+        saver = new NetworkSaver(neuralNetwork);
     }
 
-    private IEnumerator StartTrainer()
-    {
-        ToggleButtons();
-        yield return StartCoroutine(trainer.ExecuteEpochs(
-            int.Parse(epochAmount.text),
-            int.Parse(fullBatchSize.text),
-            int.Parse(miniBatchSize.text),
-            secUI.UpdateScreen
-        ));
-        secUI.UpdateScreen(false, int.Parse(epochAmount.text), int.Parse(fullBatchSize.text), int.Parse(miniBatchSize.text));
-        ToggleButtons();
+    private void InitializeClusteringSim() {
+        var clusteringUI = GameObject.Find("Secondary UICL");
+        if (!clusteringUI.TryGetComponent<ISecUI>(out secUI))
+            Debug.Log("Could not find sec UI CL");
+        clusteringUI.transform.parent.gameObject.SetActive(true);
+
+        var networkUI = GameObject.Find("Secondary UINN");
+        if (!networkUI.TryGetComponent<NN_SecUI>(out NN_SecUI otherUI))
+            Debug.Log("Could not find sec UI NN");
+        networkUI.transform.parent.gameObject.SetActive(false);
+
+        errorGraph.transform.parent.gameObject.SetActive(false);
+
+        trainer = new ClusterTrainer(this);
+        tester = new ClusterTester();
+
+        clusterer = new Clusterer(30, new Vector2Int(28,28), ((ClusterTrainer)trainer).GetRndSamples(90).ToList());
+        saver = new ClusterSaver(clusterer);
     }
 
-    private void ProjectOnTexture(Dataset img, ref Texture2D tex)
-    {
-        for (int i = 0; i < img.Data.GetLength(0); i++)
-        {
-            for (int j = 0; j < img.Data.GetLength(1); j++)
-            {
-                float intensity = (float)img.Data[i, j] / 255f;
-                tex.SetPixel(j, 28 - i, new Color(intensity, intensity, intensity, 1));
-            }
-        }
-        tex.Apply();
-    }
-
-    private void ToggleButtons()
-    {
-        forceUpdate.interactable = !forceUpdate.interactable;
-        allEpochsBtn.interactable = !allEpochsBtn.interactable;
-        oneEpochBtn.interactable = !oneEpochBtn.interactable;
-        testBtn.interactable = !testBtn.interactable;
-        epochAmount.interactable = !epochAmount.interactable;
-        fullBatchSize.interactable = !fullBatchSize.interactable;
-        miniBatchSize.interactable = !miniBatchSize.interactable;
-    }
+    #endregion
 }
