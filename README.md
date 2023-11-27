@@ -12,7 +12,7 @@ Code des Programs, welches zu Testzwecken des überwachten bzw. unüberwachten L
   - Controller:
       * Learn Type gibt den Algorithmus an, welcher getestet werden soll.
       * !WIP! Activation Function ändert die Aktivierungsfunktion des neuronalen Netzwerkes. Bisher wurde allerdings nur mit TanH gearbeitet.
-      * Cost Type ist das Äquivalent für die Kostenfunktion. (funktioniert alles?)
+      * Cost Type ist das Äquivalent für die Kostenfunktion.
   - Secondary UINN:
       * Skipped Layer Num gibt die Anzahl der versteckten Ebenen auf dem zweiten Screen an. Hat man drei Layer und gibt zwei an, wird nur der letzte Layer dargestellt.
 
@@ -31,4 +31,4 @@ vollständig trainiertes Netzwerk geladen werden.
 
 Die Treffsicherheit eines Clustering-Algorithmus ist schwierig zu bestimmen, wird deshalb zur Zeit noch mit Ausgabe von 1 ignoriert.
 
-Activation Function und Cost Function wurden bereits addressiert, zuverlässig sind jedenfalls TanH und Mean Square Error.
+Activation Function wurde bereits addressiert, zuverlässig ist jedenfalls.
