@@ -6,7 +6,7 @@ Code des Programs, welches zu Testzwecken des überwachten bzw. unüberwachten L
 
 1. Herunterladen der vorliegenden Dateien
 
-2. Nutzen der Entwicklung [Unity]([https://unity.com/de]) to install foobar.
+2. Nutzen der Entwicklung [Unity]([https://unity.com/de]) zum Öffnen des Codes
 
 3. Einstellen der gewünschten Parameter in Inspektoren von:
   - Controller:
